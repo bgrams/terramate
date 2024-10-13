@@ -407,6 +407,23 @@ func loadGenHCLBlocks(root *config.Root, st *config.Stack, cfgdir project.Path) 
 	return res, nil
 }
 
+func sortAttributesByName(attrs hhcl.Attributes) []*hhcl.Attribute {
+	return ast.SortRawAttributes(attrs)
+}
+
+func sortAttributesByNameRange(attrs hhcl.Attributes) []*hhcl.Attribute {
+	sorted := make([]*hhcl.Attribute, 0, len(attrs))
+	for _, attr := range attrs {
+		sorted = append(sorted, attr)
+	}
+
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].NameRange.Start.Line < sorted[j].NameRange.Start.Line
+	})
+
+	return sorted
+}
+
 // copyBody will copy the src body to the given target, evaluating attributes
 // using the given evaluation context.
 //
@@ -415,8 +432,9 @@ func loadGenHCLBlocks(root *config.Root, st *config.Stack, cfgdir project.Path) 
 //
 // Returns an error if the evaluation fails.
 func copyBody(dest *hclwrite.Body, src *hclsyntax.Body, eval hcl.Evaluator) error {
-	attrs := ast.SortRawAttributes(ast.AsHCLAttributes(src.Attributes))
-	for _, attr := range attrs {
+	attrs := ast.AsHCLAttributes(src.Attributes)
+
+	for _, attr := range sortAttributesByNameRange(attrs) {
 		// a generate_hcl.content block must be partially evaluated multiple
 		// times then the updates nodes should not be persisted.
 		expr := &ast.CloneExpression{
