@@ -75,7 +75,10 @@ func (e *Engine) Credential() cliauth.Credential {
 
 // LoadCredential loads the cloud credential from the environment or configuration.
 func (e *Engine) LoadCredential(preferences ...string) error {
-	region := e.CloudRegion()
+	region, err := e.CloudRegion()
+	if err != nil {
+		return err
+	}
 	cloudURL, envFound := cliauth.EnvBaseURL()
 	if !envFound {
 		cloudURL = cloud.BaseURL(region)
@@ -97,7 +100,7 @@ func (e *Engine) LoadCredential(preferences ...string) error {
 	// checks if this client version can communicate with Terramate Cloud.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultCloudTimeout)
 	defer cancel()
-	err := e.state.cloud.client.CheckVersion(ctx)
+	err = e.state.cloud.client.CheckVersion(ctx)
 	if err != nil {
 		return errors.E(err, clitest.ErrCloudCompat)
 	}
@@ -145,6 +148,11 @@ func (e *Engine) SetupCloudConfig(requestedFeatures []string) error {
 		}
 		printer.Stderr.ErrorWithDetails("failed to load the cloud credentials", err)
 		return cloudError()
+	}
+
+	region, err := e.CloudRegion()
+	if err != nil {
+		return err
 	}
 
 	// at this point we know user is onboarded, ie has at least 1 organization.
@@ -228,7 +236,7 @@ func (e *Engine) SetupCloudConfig(requestedFeatures []string) error {
 					"Pending SSO invitation",
 					errors.E(
 						"If you trust the %s%s organization, go to %s to join it",
-						org.Name, domainStr, cloud.HTMLURL(e.CloudRegion()),
+						org.Name, domainStr, cloud.HTMLURL(region),
 					),
 				)
 			}
@@ -267,12 +275,17 @@ func (e *Engine) CloudOrgName() string {
 }
 
 // CloudRegion returns the cloud region from configuration, defaulting to EU.
-func (e *Engine) CloudRegion() cloud.Region {
+func (e *Engine) CloudRegion() (cloud.Region, error) {
+	region := os.Getenv("TM_CLOUD_REGION")
+	if region != "" {
+		return cloud.ParseRegion(region)
+	}
+
 	rootcfg := e.RootNode()
 	if rootcfg.Terramate != nil && rootcfg.Terramate.Config != nil && rootcfg.Terramate.Config.Cloud != nil {
-		return rootcfg.Terramate.Config.Cloud.Location
+		return rootcfg.Terramate.Config.Cloud.Location, nil
 	}
-	return cloud.EU
+	return cloud.EU, nil
 }
 
 // IsCloudEnabled returns true if cloud features are enabled.

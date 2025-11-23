@@ -40,7 +40,10 @@ func (s *SSOSpec) Exec(_ context.Context, cli commands.CLI) error {
 	s.cliCfg = cli.Config()
 
 	orgName := s.engine.CloudOrgName()
-	region := s.engine.CloudRegion()
+	region, err := s.engine.CloudRegion()
+	if err != nil {
+		return err
+	}
 
 	if orgName == "" {
 		return errors.E(
